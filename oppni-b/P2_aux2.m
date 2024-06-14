@@ -8,7 +8,8 @@ function P2_aux2( broadcast )
 
 % check existence of subject specific struct file
     if exist(fullfile( outpath,broadcast.subj,'InputStruct_ssa.mat'),'file')  
-        InputStruct_ssa = load( fullfile( outpath,broadcast.subj,'InputStruct_ssa.mat') );
+        S = load( fullfile( outpath,broadcast.subj,'InputStruct_ssa.mat') );
+        InputStruct_ssa = S.InputStruct_ssa;
     else
         error('cannot find Input struct file for subject: %s \n');
     end
