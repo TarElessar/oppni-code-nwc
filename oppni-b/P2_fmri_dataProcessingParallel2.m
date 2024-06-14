@@ -182,6 +182,7 @@ parfor (i=1:numel(subj_list_for_proc), num_cores) % step through anat-proc, func
     broadcast_aux1.index = ns;
     broadcast_aux1.subj = subject_list{ns};
     broadcast_aux1.PipeStruct = PipeStruct_aug;
+    broadcast_aux1.ParamStruct = ParamStruct_aug;
     P2_aux1(broadcast_aux1);
 end
 
@@ -675,6 +676,7 @@ parfor (i=1:numel(subj_list_for_proc), num_cores) % step through func-proc (bloc
     broadcast_aux2.index = ns;
     broadcast_aux2.subj = subject_list{ns};
     broadcast_aux2.PipeStruct = PipeStruct_aug;
+    broadcast_aux2.ParamStruct = ParamStruct_aug;
     P2_aux2(broadcast_aux2);
 end
 
