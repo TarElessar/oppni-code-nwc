@@ -174,7 +174,8 @@ else
     subj_list_for_proc = subj_subset;
 end
 
-parfor (ns=1:subj_list_for_proc, num_cores) % step through anat-proc, func-proc (block-1)
+parfor (i=1:numel(subj_list_for_proc), num_cores) % step through anat-proc, func-proc (block-1)
+    ns = subj_list_for_proc(i);
     broadcast_aux1 = struct;
     broadcast_aux1.index = ns;
     broadcast_aux1.subj = subject_list{ns};
@@ -661,7 +662,8 @@ RegCorr2.glb=[];
 RegCorr2.mot=[];
 RegCorr2.roi=[];
 
-parfor (ns=1:subj_list_for_proc, num_cores)  % step through func-proc (block-2)
+parfor (i=1:numel(subj_list_for_proc), num_cores) % step through func-proc (block-2)
+    ns = subj_list_for_proc(i);
     broadcast_aux2 = struct;
     broadcast_aux2.index = ns;
     broadcast_aux2.subj = subject_list{ns};
