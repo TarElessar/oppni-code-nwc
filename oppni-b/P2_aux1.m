@@ -2,6 +2,7 @@ function P2_aux1( broadcast )
 
     outpath = broadcast.outpath;
     pipeline_struct = broadcast.pipeline_struct;
+    ParamStruct_aug = broadcast.ParamStruct;
 
     % check existence of subject specific struct file
     if exist(fullfile( outpath,broadcast.subj,'InputStruct_ssa.mat'),'file')  
