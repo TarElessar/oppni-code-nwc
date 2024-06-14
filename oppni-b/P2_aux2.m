@@ -2,6 +2,7 @@ function P2_aux2( broadcast )
 
     outpath = broadcast.outpath;
     pipeline_struct = broadcast.pipeline_struct;
+    ParamStruct_aug = broadcast.ParamStruct;
     maskisnew = broadcast.maskisnew;
     MB = broadcast.MB;
     maskS = broadcast.maskS;
