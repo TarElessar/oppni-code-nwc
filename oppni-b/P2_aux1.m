@@ -1,5 +1,8 @@
 function P2_aux1( broadcast )
 
+    outpath = broadcast.outpath;
+    pipeline_struct = broadcast.pipeline_struct;
+
     % check existence of subject specific struct file
     if exist(fullfile( outpath,broadcast.subj,'InputStruct_ssa.mat'),'file')  
         InputStruct_ssa = load( fullfile( outpath,broadcast.subj,'InputStruct_ssa.mat') );
@@ -7,8 +10,7 @@ function P2_aux1( broadcast )
         error('cannot find Input struct file for subject: %s \n');
     end
 
-    outpath = broadcast.outpath;
-    pipeline_struct = broadcast.pipeline_struct;
+
 
     % quick formatting stuff, again assuRImes that directory structure was already constructed in "P0" pipeline step 
     opath0 = fullfile(outpath,InputStruct_ssa.PREFIX,'rawdata');
