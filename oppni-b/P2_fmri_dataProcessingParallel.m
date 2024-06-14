@@ -1,4 +1,4 @@
-function P2_fmri_dataProcessing( inputfile, pipelinefile, paramlist, outpath, big_skip, mask_subj_idxes, subj_subset )
+function P2_fmri_dataProcessing( inputfile, pipelinefile, paramlist, outpath, big_skip, mask_subj_idxes, subj_subset, num_cores )
 %
 % =========================================================================
 % P2_FMRI_DATAPROCESSING: this script should be run after the "P0" and "P1"
@@ -43,6 +43,11 @@ if nargin<6
 end
 if nargin<7
     subj_subset=0;
+end
+if nargin<8
+    num_cores=0;
+else
+    parpool(num_cores);
 end
 
 % initializing structure and running checkes
@@ -169,29 +174,36 @@ else
     subj_list_for_proc = subj_subset;
 end
 
-for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
+%PipeStruct_aug_warp = PipeStruct_aug.pipe_idx.Warp;
+%PipeStruct_aug_seg = PipeStruct_aug.pipe_idx.Seg;
+%PipeStruct_aug_P1 = PipeStruct_aug.pipe_idx.P1;
+%PipeStruct_aug_Prefix = PipeStruct_aug.PNAME{1};
 
+parfor (ns=1:subj_list_for_proc, num_cores) % step through anat-proc, func-proc (block-1)
+    
     % check existence of subject specific struct file
     if exist(fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat'),'file')  
-        load( fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat') )
+        InputStruct_ssa = load( fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat') )
     else
         error('cannot find Input struct file for subject: %s \n');
     end
+
+    PipeStruct_aug_cp = PipeStruct_aug;
 
     % quick formatting stuff, again assuRImes that directory structure was already constructed in "P0" pipeline step 
     opath0 = fullfile(outpath,InputStruct_ssa.PREFIX,'rawdata');
     %
     opath1a = fullfile( outpath, InputStruct_ssa.PREFIX,'anat_proc');
-    opath2a = fullfile( opath1a,sprintf('subpipe_%03u',    PipeStruct_aug.pipe_idx.Warp));
-    opath3a = fullfile( opath2a,sprintf('seg_subpipe_%03u',PipeStruct_aug.pipe_idx.Seg ));
+    opath2a = fullfile( opath1a,sprintf('subpipe_%03u',    PipeStruct_aug_cp.pipe_idx.Warp));
+    opath3a = fullfile( opath2a,sprintf('seg_subpipe_%03u',PipeStruct_aug_cp.pipe_idx.Seg ));
     %
     opath1p = fullfile(outpath,InputStruct_ssa.PREFIX,'phys_proc');
     %
     opath1f = fullfile(outpath,InputStruct_ssa.PREFIX,'func_proc_p1');
-    opath2f = fullfile(opath1f,sprintf('subpipe_%03u',PipeStruct_aug.pipe_idx.P1));
-    opath3f = fullfile(opath2f,sprintf('seg_subpipe_%03u',PipeStruct_aug.pipe_idx.Seg ));
+    opath2f = fullfile(opath1f,sprintf('subpipe_%03u',PipeStruct_aug_cp.pipe_idx.P1));
+    opath3f = fullfile(opath2f,sprintf('seg_subpipe_%03u',PipeStruct_aug_cp.pipe_idx.Seg ));
     %
-    opath4f = fullfile(outpath,InputStruct_ssa.PREFIX,'func_proc_p2',['pipe_',PipeStruct_aug.PNAME{1}]); 
+    opath4f = fullfile(outpath,InputStruct_ssa.PREFIX,'func_proc_p2',['pipe_',PipeStruct_aug_cp.PNAME{1}]); 
 
     fprintf('\n===> subj %s (%u/%u), anat. processing...\n',subject_list{ns},ns,numel(subject_list)),
     %% =======================================================================
@@ -220,7 +232,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
 
     % >>> Spatial Masking
     Step = 'AMASK';
-    if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+    if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
         error('cannot turn this step off!');
     else
         % get function handle for analysis model of interest
@@ -229,12 +241,12 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
         pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
         cd(currPath);                               % jump back to current path
         % execute step:
-        pfun( sprintf('%s/anat%u_2std.nii.gz', opath1a,nr), ParamStruct_aug.TEMPLATE_loc, opath2a, PipeStruct_aug.(Step)(2:end) );  
+        pfun( sprintf('%s/anat%u_2std.nii.gz', opath1a,nr), PipeStruct_aug_cp.TEMPLATE_loc, opath2a, PipeStruct_aug_cp.(Step)(2:end) );  
     end
 
     % >>> Spatial Warping
     Step = 'AWARP';
-    if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+    if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
         error('cannot turn this step off!');
     else
         % get function handle for analysis model of interest
@@ -248,7 +260,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
 
     % >>> Anatomic segmentation
     Step = 'ASEG';
-    if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+    if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
         error('cannot turn this step off!');
     else
         % get function handle for analysis model of interest
@@ -257,17 +269,17 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
         pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
         cd(currPath);                               % jump back to current path
         % execute step:
-        pfun( sprintf('%s/anat_procss.nii.gz',opath2a), sprintf('%s/anatBrainMask.nii.gz',opath2a), opath3a, PipeStruct_aug.(Step)(2:end) );  
+        pfun( sprintf('%s/anat_procss.nii.gz',opath2a), sprintf('%s/anatBrainMask.nii.gz',opath2a), opath3a, PipeStruct_aug_cp.(Step)(2:end) );  
     end
     
     % extra step: warping the anatomical segmentations into template space
     tisslist = {'CSF','GM','WM'}; % list tissues in increasing order of T1 intensity
     for i=1:3
         if ~exist(sprintf('%s/anat_seg_%s_warped.nii.gz',opath3a,tisslist{i}),'file')
-            if contains(PipeStruct_aug.AWARP{1},'AF') %afni-styles warp
+            if contains(PipeStruct_aug_cp.AWARP{1},'AF') %afni-styles warp
                 unix(sprintf('3dNwarpApply -master %s/anat_warped.nii.gz -source %s/anat_seg_%s.nii.gz -nwarp "%s/anatQQ_WARP.nii.gz %s/anatQQ.aff12.1D" -prefix %s/anat_seg_%s_warped.nii.gz',...
                     opath2a,opath3a,tisslist{i},opath2a,opath2a,opath3a,tisslist{i}));
-            elseif contains(PipeStruct_aug.AWARP{1},'AN') %ants-styles warp
+            elseif contains(PipeStruct_aug_cp.AWARP{1},'AN') %ants-styles warp
                 unix(sprintf('antsApplyTransforms -d 3 -i %s/anat_seg_%s.nii.gz -r %s/anat_warped.nii.gz -n linear -t %s/anatQQ_WARP.nii.gz -t %s/anatQQ_GenericAffine.mat -o %s/anat_seg_%s_warped.nii.gz',...
                     opath3a,tisslist{i}, opath2a, opath2a,opath2a, opath3a,tisslist{i}));
             else
@@ -299,16 +311,21 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
             missing_physio=missing_physio+1;
         end
     end
-    if missing_physio>0 && ~strcmpi(PipeStruct_aug.RICOR{1},'OFF')
+    if missing_physio>0 && ~strcmpi(PipeStruct_aug_cp.RICOR{1},'OFF')
         warning('subject %s has %u/%u runs with missing physio. Turning RICOR off!',InputStruct_ssa.PREFIX, missing_physio,InputStruct_ssa.N_func)
-        PipeStruct_aug.RICOR{1}='OFF';
+        PipeStruct_aug_cp.RICOR{1}='OFF';
     end
     %%%%%========== compatibility adjustments, done
 
     % --> NB: block-1 processing gets split into prewarp/warp/postwarp subfolders for ease of debugging
     
     % clear for variable run lengths between subj.
-    clear prefix_set Funcfile_set base_set prefix_set_wrp Funcfile_set_wrp;
+    %clear prefix_set Funcfile_set base_set prefix_set_wrp Funcfile_set_wrp;
+    prefix_set = cell(InputStruct_ssa.N_func);
+    Funcfile_set = cell(InputStruct_ssa.N_func);
+    base_set = cell(InputStruct_ssa.N_func);
+    prefix_set_wrp = cell(InputStruct_ssa.N_func);
+    Funcfile_set_wrp = cell(InputStruct_ssa.N_func);
 
     for nr=1:InputStruct_ssa.N_func
 
@@ -323,7 +340,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
         % we do any deobliqueing/alignment which destroys slice-based information
         
         % INIMOT is constructing some preliminary estimates of displacement -- finds the minimum-displacement volume for motion correction later 
-        if strcmpi(ParamStruct_aug.INIMOT{1},'OP1')
+        if strcmpi(PipeStruct_aug_cp.INIMOT{1},'OP1')
             motref_0rel = inimot_OP1( sprintf('%s/func%u%s.nii.gz',opath0,nr,drop_tag), sprintf('func%u',nr), sprintf('%s/init_mot_estim',opath1f) );
         else
             error('unrecognized initial motion estimator?!')
@@ -331,7 +348,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
 
         % >>> Removing "Spikes" in fMRI data
         Step = 'DESPIKE';
-        if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+        if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
             unix(sprintf('cp %s/func%u%s.nii.gz %s/prewarp/func%u_despike.nii.gz',opath0,nr,drop_tag, opath2f,nr));
         else
             % get function handle for analysis model of interest
@@ -344,7 +361,8 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
         end
 
         % >> Pipeline Step #5: "RICOR"
-        if strcmpi(PipeStruct_aug.RICOR{1},'AF1')
+        if strcmpi(PipeStruct_aug_cp.RICOR{1},'AF1')
+                    ricormat = [];
                     %-- c. slice-based physio correction
                     %
                     % get the stripped-down physio data matrix
@@ -363,7 +381,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
                     fclose(fid);
                     % take the matrix of slicewise physio covariates and regress slice-by-slice from the despiked data
                     ricor_regress( sprintf('%s/prewarp/func%u_despike.nii.gz',opath2f,nr), ricormat, sprintf('%s/prewarp/func%u_ricor.nii.gz',opath2f,nr) );
-        elseif strcmpi(PipeStruct_aug.RICOR{1},'OFF')
+        elseif strcmpi(PipeStruct_aug_cp.RICOR{1},'OFF')
             unix(sprintf('cp %s/prewarp/func%u_despike.nii.gz %s/prewarp/func%u_ricor.nii.gz',opath2f,nr, opath2f,nr));
         else
             error('unrecognized ricorring?!')
@@ -371,7 +389,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
 
         % >>> Slice-Timing Correction
         Step = 'TSHIFT';
-        if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+        if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
             unix(sprintf('cp %s/prewarp/func%u_ricor.nii.gz %s/prewarp/func%u_tshift.nii.gz',opath2f,nr, opath2f,nr));
         else
             % get function handle for analysis model of interest
@@ -412,7 +430,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
 
     % >>> Functional Warping
     Step = 'FWARP';
-    if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+    if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
         error('cannot turn this step off!');
     else
         % get function handle for analysis model of interest
@@ -421,12 +439,12 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
         pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
         cd(currPath);                               % jump back to current path
         % execute step:
-        pfun( Funcfile_set, prefix_set, odir1, odir2, base_set, Anatloc, PipeStruct_aug.(Step)(2:end) );  
+        pfun( Funcfile_set, prefix_set, odir1, odir2, base_set, Anatloc, PipeStruct_aug_cp.(Step)(2:end) );  
     end
 
     % >>> Spatial Smoothing
     Step = 'SMOOTH';
-    if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+    if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
         error('cannot turn this step off!');
     else
         % get function handle for analysis model of interest
@@ -436,7 +454,7 @@ for ns=subj_list_for_proc % step through anat-proc, func-proc (block-1)
         cd(currPath);                               % jump back to current path
         % execute step:
         for ni=1:numel(Funcfile_set_wrp)
-            pfun( Funcfile_set_wrp{ni}, prefix_set_wrp{ni}, odir2, PipeStruct_aug.(Step)(2:end) );  
+            pfun( Funcfile_set_wrp{ni}, prefix_set_wrp{ni}, odir2, PipeStruct_aug_cp.(Step)(2:end) );  
         end
     end
 
@@ -501,7 +519,7 @@ nrmax = 0;
 for ns=1:numel(subject_list)
     % check existence of subject specific struct file
     if exist(fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat'),'file')  
-        load( fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat') )
+        InputStruct_ssa = load( fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat') )
     else
         error('cannot find Input struct file for subject: %s \n');
     end
@@ -967,34 +985,43 @@ MBstr = ([outpath,'/_group_level/masks/pipe_',PipeStruct_aug.PNAME{1},'/func_bra
 MB = load_untouch_niiz(MBstr);
 maskS = double(MB.img);
 % declare empty struct --> nuisance regressor correlation maps
-RegCorr2.det=[];
-RegCorr2.glb=[];
-RegCorr2.mot=[];
-RegCorr2.roi=[];
+% RegCorr2.det=[];
+% RegCorr2.glb=[];
+% RegCorr2.mot=[];
+% RegCorr2.roi=[];
 
-for ns=subj_list_for_proc % step through func-proc (block-2)
+parfor (ns=1:subj_list_for_proc, num_cores) % step through func-proc (block-2)
+
+    RegCorr2 = struct;
+    RegCorr2.det=[];
+    RegCorr2.glb=[];
+    RegCorr2.mot=[];
+    RegCorr2.roi=[];
+
 
     % check existence of subject specific struct file
     if exist(fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat'),'file')  
-        load( fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat') )
+        InputStruct_ssa = load( fullfile( outpath,subject_list{ns},'InputStruct_ssa.mat') )
     else
         error('cannot find Input struct file for subject: %s \n');
     end
+
+    PipeStruct_aug_cp = PipeStruct_aug;
 
     % quick formatting stuff, again assuRImes that directory structure was already constructed in "P0" pipeline step 
     opath0 = fullfile(outpath,InputStruct_ssa.PREFIX,'rawdata');
     %
     opath1a = fullfile( outpath, InputStruct_ssa.PREFIX,'anat_proc');
-    opath2a = fullfile( opath1a,sprintf('subpipe_%03u',    PipeStruct_aug.pipe_idx.Warp));
-    opath3a = fullfile( opath2a,sprintf('seg_subpipe_%03u',PipeStruct_aug.pipe_idx.Seg ));
+    opath2a = fullfile( opath1a,sprintf('subpipe_%03u',    PipeStruct_aug_cp.pipe_idx.Warp));
+    opath3a = fullfile( opath2a,sprintf('seg_subpipe_%03u',PipeStruct_aug_cp.pipe_idx.Seg ));
     %
     opath1p = fullfile(outpath,InputStruct_ssa.PREFIX,'phys_proc');
     %
     opath1f = fullfile(outpath,InputStruct_ssa.PREFIX,'func_proc_p1');
-    opath2f = fullfile(opath1f,sprintf('subpipe_%03u',PipeStruct_aug.pipe_idx.P1));
-    opath3f = fullfile(opath2f,sprintf('seg_subpipe_%03u',PipeStruct_aug.pipe_idx.Seg ));
+    opath2f = fullfile(opath1f,sprintf('subpipe_%03u',PipeStruct_aug_cp.pipe_idx.P1));
+    opath3f = fullfile(opath2f,sprintf('seg_subpipe_%03u',PipeStruct_aug_cp.pipe_idx.Seg ));
     %
-    opath4f = fullfile(outpath,InputStruct_ssa.PREFIX,'func_proc_p2',['pipe_',PipeStruct_aug.PNAME{1}]); 
+    opath4f = fullfile(outpath,InputStruct_ssa.PREFIX,'func_proc_p2',['pipe_',PipeStruct_aug_cp.PNAME{1}]); 
 
     fprintf('\n===> subj %s (%u/%u), func. processing (part-2)...\n',subject_list{ns},ns,numel(subject_list)),
     %% =======================================================================
@@ -1010,9 +1037,9 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
             missing_physio=missing_physio+1;
         end
     end
-    if analysis_struct.uses_taskfile==0  && ~strcmpi(PipeStruct_aug.TASKREG{1},'OFF')
+    if analysis_struct.uses_taskfile==0  && ~strcmpi(PipeStruct_aug_cp.TASKREG{1},'OFF')
         warning('your analysis model does not specify a task design. Turning TASKREG off!')
-        PipeStruct_aug.TASKREG{1}={'OFF'};
+        PipeStruct_aug_cp.TASKREG{1}={'OFF'};
     end
     %%%%%========== compatibility adjustments, done
 
@@ -1059,7 +1086,7 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
             
                 % >>> Temporal Detrending
                 Step = 'DETREG';
-                if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
                     xdet = ones( InputStruct_ssa.frun(nr).Nt_adj, 1 );
                     statd = [];
                 else
@@ -1069,12 +1096,12 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
                     pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
                     cd(currPath);                               % jump back to current path
                     % execute step:
-                    [xdet,statd] = pfun( InputStruct_ssa.frun(nr).Nt_adj, InputStruct_ssa.TR_MSEC, PipeStruct_aug.(Step)(2:end) );  
+                    [xdet,statd] = pfun( InputStruct_ssa.frun(nr).Nt_adj, InputStruct_ssa.TR_MSEC, PipeStruct_aug_cp.(Step)(2:end) );  
                 end
 
                 % >>> Global Signal Regression
                 Step = 'GSREG';
-                if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
                     xglb = [];
                     statg = [];
                 else
@@ -1084,12 +1111,12 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
                     pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
                     cd(currPath);                               % jump back to current path
                     % execute step:
-                    [xglb,statg] = pfun( volmatS, PipeStruct_aug.(Step)(2:end) );  
+                    [xglb,statg] = pfun( volmatS, PipeStruct_aug_cp.(Step)(2:end) );  
                 end
 
                 % >>> Motion Parameter Regression
                 Step = 'MOTREG';
-                if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
                     xmot = [];
                     statm = [];
                 else
@@ -1099,31 +1126,31 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
                     pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
                     cd(currPath);                               % jump back to current path
                     % execute step:
-                    [xmot,statm] = pfun( sprintf('%s/warp/func%u_mpe',opath2f,nr), PipeStruct_aug.(Step)(2:end) );  
+                    [xmot,statm] = pfun( sprintf('%s/warp/func%u_mpe',opath2f,nr), PipeStruct_aug_cp.(Step)(2:end) );  
                 end
 
                 % >>> Noise ROI Regression
                 Step = 'ROIREG';
-                if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
                     xroi = [];
                     statr = [];
                 else
-                    maskpath  = [outpath,'/_group_level/masks/pipe_',PipeStruct_aug.PNAME{1}];
-                    parcpath  = [outpath,'/_group_level/parcellations/pipe_',PipeStruct_aug.PNAME{1}];
+                    maskpath  = [outpath,'/_group_level/masks/pipe_',PipeStruct_aug_cp.PNAME{1}];
+                    parcpath  = [outpath,'/_group_level/parcellations/pipe_',PipeStruct_aug_cp.PNAME{1}];
                     % get function handle for analysis model of interest
                     currPath=pwd;                               % get current path
                     cd(pipeline_struct.(Step).filepath);               % jump to module directory
                     pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
                     cd(currPath);                               % jump back to current path
                     % execute step:
-                    [xroi,statr] = pfun( sprintf('%s/postwarp/func%u_warped.nii.gz',opath2f,nr), {maskpath,parcpath}, PipeStruct_aug.(Step)(2:end) );  
+                    [xroi,statr] = pfun( sprintf('%s/postwarp/func%u_warped.nii.gz',opath2f,nr), {maskpath,parcpath}, PipeStruct_aug_cp.(Step)(2:end) );  
                 end
                 
                 % >>> Regression of Task Design
                 Step = 'TASKREG';
-                if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
                     Xsignal = [];
-                elseif strcmpi(PipeStruct_aug.TASKREG{1},'OP1')
+                elseif strcmpi(PipeStruct_aug_cp.TASKREG{1},'OP1')
                     Xsignal = InputStruct_ssa.task_contrast{nr}.design_mat;
                     Xsignal = bsxfun(@rdivide, Xsignal, sqrt(sum(Xsignal.^2)));
                 else
@@ -1138,22 +1165,22 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
                 if nr==1 && ~isempty(xdet) && size(xdet,2)>1
                     xtmp = zscore(xdet(:,2:end));
                     RegCorr2.det(:,:,ns) = (ztmp*xtmp)./(InputStruct_ssa.frun(nr).Nt_adj-1);
-                    RegStat.det(ns,:) = statd;
+                    %RegStat.det(ns,:) = statd;
                 end
                 if nr==1 && ~isempty(xglb)
                     xtmp = zscore(xglb);
                     RegCorr2.glb(:,:,ns) = (ztmp*xtmp)./(InputStruct_ssa.frun(nr).Nt_adj-1);
-                    RegStat.glb(ns,:) = statg;
+                    %RegStat.glb(ns,:) = statg;
                 end
                 if nr==1 && ~isempty(xmot)
                     xtmp = zscore(xmot);
                     RegCorr2.mot(:,:,ns) = (ztmp*xtmp)./(InputStruct_ssa.frun(nr).Nt_adj-1);
-                    RegStat.mot(ns,:) = statm;
+                    %RegStat.mot(ns,:) = statm;
                 end
                 if nr==1 && ~isempty(xroi)
                     xtmp = zscore(xroi);
                     RegCorr2.roi(:,:,ns) = (ztmp*xtmp)./(InputStruct_ssa.frun(nr).Nt_adj-1);
-                    RegStat.roi(ns,:) = statr;
+                    %RegStat.roi(ns,:) = statr;
                 end
                 % --> some regressional stats
         
@@ -1164,7 +1191,7 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
             
                 % >>> Low-pass Filtering
                 Step = 'LOPASS';
-                if strcmpi(PipeStruct_aug.(Step){1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.(Step){1},'OFF')
                     disp('skipping lopass');
                 else
                     % get function handle for analysis model of interest
@@ -1173,18 +1200,19 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
                     pfun= str2func(pipeline_struct.(Step).model_name); % get function handle
                     cd(currPath);                               % jump back to current path
                     % execute step:
-                    volmatF = pfun( volmatF, InputStruct_ssa.TR_MSEC, PipeStruct_aug.(Step)(2:end) );  
+                    volmatF = pfun( volmatF, InputStruct_ssa.TR_MSEC, PipeStruct_aug_cp.(Step)(2:end) );  
                 end
                 
                 % >>> Component-based filtering
-                if strcmpi(PipeStruct_aug.COMPFILT{1},'OFF')
+                if strcmpi(PipeStruct_aug_cp.COMPFILT{1},'OFF')
                     disp('skipping compfilt');
                 else
                     error('no compfilt options enabled yet!!')
                 end
             
                 %% Export fully processed data as .mat file and full .nii file
-                clear TMPVOL;
+                %clear TMPVOL;
+                TMPVOL = zeros(2,2);
                 for(p=1:size(volmatF,2) )
                     tmp=double(MB.img);
                     tmp(tmp>0)= volmatF(:,p);
@@ -1205,7 +1233,7 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
     if strcmpi( ParamStruct_aug.ANALYSIS, 'NONE')
         disp('no further analysis, just doing one last quick check...')
         % extract and put the runs into cell array
-        clear volcel;
+        volcel = [];
         for nr=1:InputStruct_ssa.N_func
            x=load([opath4f,'/func',num2str(nr),'_fullproc.mat']);
            % quick check in case mask somehow doesnt match matfile
@@ -1253,7 +1281,7 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
         end
         
         % extract and put the runs into cell array
-        clear volcel;
+        volcel = cell(InputStruct_ssa.N_func);
         for nr=1:InputStruct_ssa.N_func
            x=load([opath4f,'/func',num2str(nr),'_fullproc.mat']);
 
@@ -1334,6 +1362,7 @@ for ns=subj_list_for_proc % step through func-proc (block-2)
     end
 end
 
-save([outpath,'/_group_level/brain_maps/pipe_',PipeStruct_aug.PNAME{1},'/regstat.mat'],'RegCorr2');
+%save([outpath,'/_group_level/brain_maps/pipe_',PipeStruct_aug.PNAME{1},'/regstat.mat'],'RegCorr2');
 
 disp('funxionale block-2 done');
+
